@@ -36,6 +36,12 @@ enum Commands {
         runtime_dir: Option<PathBuf>,
         #[arg(long)]
         state_dir: Option<PathBuf>,
+        /// Also accept the legacy daemon on a Linux abstract Unix socket (root/owner only).
+        #[arg(long)]
+        abstract_name: Option<String>,
+        /// Disable configured automation; require a human decision for every request.
+        #[arg(long)]
+        manual: bool,
     },
     /// Attach to a running service.
     Tui {
@@ -83,7 +89,12 @@ fn control_socket(path: Option<PathBuf>) -> Result<PathBuf> {
         .unwrap_or_else(|| Ok(config::runtime_dir()?.join("control.sock")))
 }
 
-async fn serve(config: Config, runtime: PathBuf, state: PathBuf) -> Result<()> {
+async fn serve(
+    config: Config,
+    runtime: PathBuf,
+    state: PathBuf,
+    abstract_name: Option<String>,
+) -> Result<()> {
     ipc::private_dir(&runtime)?;
     ipc::private_dir(&state)?;
     let db = state.join("history.sqlite3");
@@ -121,9 +132,17 @@ async fn serve(config: Config, runtime: PathBuf, state: PathBuf) -> Result<()> {
     );
     let mut grpc_task = tokio::spawn(server::serve(grpc, Arc::clone(&broker)));
     let mut ipc_task = tokio::spawn(ipc::serve(control, Arc::clone(&broker)));
+    let abstract_broker = broker.clone();
+    let mut abstract_task = tokio::spawn(async move {
+        match abstract_name {
+            Some(name) => server::serve_abstract(&name, abstract_broker).await,
+            None => std::future::pending::<Result<()>>().await,
+        }
+    });
     let result: Result<()> = tokio::select! {
         result = &mut grpc_task => result.unwrap_or_else(|error| Err(error.into())),
         result = &mut ipc_task => result.unwrap_or_else(|error| Err(error.into())),
+        result = &mut abstract_task => result.unwrap_or_else(|error| Err(error.into())),
         _ = shutdown_signal() => Ok(()),
     };
     broker.shutdown();
@@ -131,6 +150,7 @@ async fn serve(config: Config, runtime: PathBuf, state: PathBuf) -> Result<()> {
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     grpc_task.abort();
     ipc_task.abort();
+    abstract_task.abort();
     ipc::remove_socket(&grpc_path);
     ipc::remove_socket(&control_path);
     result
@@ -152,11 +172,16 @@ async fn main() -> Result<()> {
             config: path,
             runtime_dir,
             state_dir,
+            abstract_name,
+            manual,
         } => {
-            let config = Config::load(path.as_deref())?;
+            let mut config = Config::load(path.as_deref())?;
+            if manual {
+                config.automation.clear();
+            }
             let runtime = runtime_dir.map(Ok).unwrap_or_else(config::runtime_dir)?;
             let state = state_dir.map(Ok).unwrap_or_else(config::state_dir)?;
-            serve(config, runtime, state).await
+            serve(config, runtime, state, abstract_name).await
         }
         Commands::Tui { socket } => tui::run(tui::Source::Service(control_socket(socket)?)).await,
         Commands::Demo => {

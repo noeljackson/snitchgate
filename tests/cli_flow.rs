@@ -26,6 +26,10 @@ async fn cli(args: &[&str]) -> String {
 }
 
 async fn start(root: &Path, config: Option<&Path>) -> (Child, PathBuf, PathBuf) {
+    start_mode(root, config, false).await
+}
+
+async fn start_mode(root: &Path, config: Option<&Path>, manual: bool) -> (Child, PathBuf, PathBuf) {
     let runtime = root.join("runtime");
     let state = root.join("state");
     let mut command = Command::new(BIN);
@@ -42,6 +46,9 @@ async fn start(root: &Path, config: Option<&Path>) -> (Child, PathBuf, PathBuf) 
     if let Some(config) = config {
         command.arg("--config").arg(config);
     }
+    if manual {
+        command.arg("--manual");
+    }
     let child = command.spawn().unwrap();
     let control = runtime.join("control.sock");
     let grpc = runtime.join("opensnitch.sock");
@@ -53,6 +60,58 @@ async fn start(root: &Path, config: Option<&Path>) -> (Child, PathBuf, PathBuf) 
     .await
     .unwrap();
     (child, control, grpc)
+}
+
+#[tokio::test]
+async fn binary_manual_mode_disables_an_explicit_matching_automation_scope() {
+    let root = tempfile::tempdir().unwrap();
+    let jev = root.path().join("jev.sock");
+    let provider = mock_provider(&jev, json!({"model":"jev-fixture","answers":{"category":{"type":"choice","choice":"development","confidence":0.99}}})).await;
+    let config = root.path().join("manual.toml");
+    std::fs::write(&config, format!("[jev]\nenabled=true\nendpoint='http://127.0.0.1/api'\nunix_socket={jev:?}\n[[automation]]\nprocess='/usr/bin/curl'\nuid=1000\nip='127.0.0.1'\nport=8000\nprotocol='tcp'\ncategory='development'\naction='allow'\nmin_confidence=0.9\n")).unwrap();
+    let (mut service, control, grpc) = start_mode(root.path(), Some(&config), true).await;
+    let mut mock = Command::new(BIN);
+    mock.arg("mock").arg("--socket").arg(&grpc);
+    let response = tokio::spawn(async move { mock.output().await.unwrap() });
+    provider.await.unwrap();
+    let snapshot = tokio::time::timeout(StdDuration::from_secs(3), async {
+        loop {
+            let snapshot = ipc::request(&control, IpcCommand::Snapshot)
+                .await
+                .unwrap()
+                .snapshot
+                .unwrap();
+            if snapshot
+                .pending
+                .first()
+                .is_some_and(|e| e.assessment.is_some())
+            {
+                break snapshot;
+            }
+            tokio::time::sleep(StdDuration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(snapshot.automation_scopes, 0);
+    assert!(snapshot.history.is_empty());
+    assert!(snapshot.pending[0].verdict.is_none());
+    ipc::request(
+        &control,
+        IpcCommand::Decide {
+            id: snapshot.pending[0].id.clone(),
+            action: Action::Deny,
+            duration: Duration::Once,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        String::from_utf8(response.await.unwrap().stdout)
+            .unwrap()
+            .contains("deny / once")
+    );
+    stop(&mut service, &control, &grpc).await;
 }
 
 async fn stop(child: &mut Child, control: &Path, grpc: &Path) {

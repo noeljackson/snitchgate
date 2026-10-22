@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use anyhow::Result;
-use std::{pin::Pin, sync::Arc};
+use std::{os::unix::fs::MetadataExt, pin::Pin, sync::Arc};
 use tokio::net::UnixListener;
 use tokio_stream::{
     Stream,
@@ -96,8 +96,54 @@ impl Ui for OpenSnitch {
 pub async fn serve(listener: UnixListener, broker: Arc<Broker>) -> Result<()> {
     tonic::transport::Server::builder()
         .concurrency_limit_per_connection(256)
-        .add_service(UiServer::new(OpenSnitch { broker }).max_decoding_message_size(1024 * 1024))
+        .add_service(
+            UiServer::new(OpenSnitch { broker }).max_decoding_message_size(16 * 1024 * 1024),
+        )
         .serve_with_incoming(UnixListenerStream::new(listener))
+        .await?;
+    Ok(())
+}
+
+/// grpc-go 1.32 uses a filesystem Unix target as its HTTP/2 authority, which
+/// modern HTTP stacks correctly reject. A slash-free abstract socket name is
+/// compatible with the installed daemon without weakening HTTP validation.
+pub async fn serve_abstract(name: &str, broker: Arc<Broker>) -> Result<()> {
+    use futures_util::StreamExt;
+    use std::os::linux::net::SocketAddrExt;
+    anyhow::ensure!(
+        !name.is_empty()
+            && name.len() <= 100
+            && name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_')),
+        "invalid abstract socket name"
+    );
+    let address = std::os::unix::net::SocketAddr::from_abstract_name(name)?;
+    let listener = std::os::unix::net::UnixListener::bind_addr(&address)?;
+    listener.set_nonblocking(true)?;
+    let listener = UnixListener::from_std(listener)?;
+    let uid = std::fs::metadata("/proc/self")?.uid();
+    // Abstract sockets have no filesystem permissions. Require kernel peer
+    // credentials: only the owner and root daemon may use this local endpoint.
+    let incoming = UnixListenerStream::new(listener).filter_map(move |stream| async move {
+        match stream {
+            Ok(stream)
+                if stream
+                    .peer_cred()
+                    .is_ok_and(|cred| cred.uid() == 0 || cred.uid() == uid) =>
+            {
+                Some(Ok::<_, std::io::Error>(stream))
+            }
+            Err(error) => Some(Err(error)),
+            _ => None,
+        }
+    });
+    tonic::transport::Server::builder()
+        .concurrency_limit_per_connection(256)
+        .add_service(
+            UiServer::new(OpenSnitch { broker }).max_decoding_message_size(16 * 1024 * 1024),
+        )
+        .serve_with_incoming(incoming)
         .await?;
     Ok(())
 }

@@ -5,9 +5,10 @@ broker handles pending requests while the TUI provides inspection and temporary
 allow/deny decisions. Optional Jev classification and Ollama explanations help
 triage requests; deterministic policy controls automation.
 
-This is an initial implementation. It has isolated gRPC and provider integration
-tests; it has **not been connected to a live OpenSnitch daemon**. The service uses
-its own private sockets and does not change your firewall configuration.
+This is an initial implementation with gRPC/provider integration tests and
+real-daemon enforcement tests in isolated network/mount namespaces. The default
+service uses private sockets. An attended host trial is a separate explicit
+action; starting the service does not change firewall configuration.
 
 ## Try it
 
@@ -67,6 +68,23 @@ once, and removes its own sockets during normal shutdown.
 Closing the TUI leaves the service running. A missing TUI, full queue, expired
 request, or failed classifier never grants traffic or creates permanent policy.
 Default request deadline: 90 seconds, below OpenSnitch 1.7.2's 120-second deadline.
+
+`serve --manual` explicitly disables configured automation while retaining
+classification. `--abstract-name snitchgate-1000` additionally exposes a local
+Linux abstract Unix endpoint, restricted by kernel peer UID to root and this
+user. For the installed OpenSnitch 1.7.2 daemon, use `unix:@snitchgate-1000` as
+its UI address. Its older grpc-go client sends an invalid HTTP/2 authority with
+filesystem Unix paths; an abstract name avoids that compatibility problem.
+The private filesystem control socket stays the TUI/approval interface.
+
+On Noelarchy, `/home/noel/noelarchy/docs/snitchgate-live.md` documents the
+attended manual trial and `make opensnitch-snitchgate-trial`. It changes the UI
+destination through a temporary runtime config mount, preserving the on-disk
+config and daemon memory, and restores the existing GUI on expiry, interruption,
+or broker failure. Prepare the manual broker and a single `approvals --live`
+worker first; the preflight requires a live channel registration. Existing rules
+still handle covered traffic. Classification and explanations accompany new
+prompts; automatic decisions stay disabled.
 
 ## Jev and the second model
 
@@ -291,3 +309,10 @@ compiled with Tonic/Prost. Tests use local Unix sockets and mock providers; no
 credentials, root access, or live firewall are required. See [PLAN.md](PLAN.md)
 for architecture, remaining work, and live handover criteria, and
 [THIRD_PARTY.md](THIRD_PARTY.md) for protocol provenance and licensing.
+
+`python scripts/kernel-smoke.py` is an opt-in Arch/Noelarchy enforcement and
+handover check requiring sudo, the installed OpenSnitch daemon, nftables, iproute2,
+curl, and Noelarchy's trial helper. It creates fresh network/mount namespaces,
+uses only loopback fixtures and isolated rules/config, verifies allow/deny/timeout
+and hot rollback, and never connects to the host daemon's socket or changes its
+network/config. Private evidence is kept under the user runtime directory.

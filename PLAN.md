@@ -54,6 +54,13 @@ confidence nor a chat response creates permanent policy. Telegram is a future
 transport adapter. Slack needs separate bot/app credentials and an authorized
 channel registration before it can post.
 
+An isolated real OpenSnitch 1.7.2 daemon now verifies packet enforcement for
+allow/deny/timeout, non-persistence, hot UI handover, and config rollback without
+a restart. Its grpc-go 1.32 client requires the slash-free `unix:@NAME` endpoint;
+the optional abstract listener enforces root/owner peer credentials. `--manual`
+clears automation explicitly. Noelarchy provides a bounded attended host trial;
+the full eBPF host traffic mix and operational longevity remain to be verified.
+
 ## Next milestones
 
 1. **Replay and evaluation.** Import redacted OpenSnitch event samples into a
