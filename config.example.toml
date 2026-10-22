@@ -1,0 +1,31 @@
+# Safe defaults: manual decisions, no external provider calls, no automation.
+request_timeout_seconds = 90
+max_pending = 256
+classifier_concurrency = 4
+history_limit = 10000
+
+[jev]
+enabled = false
+endpoint = "https://api.typesafe.ai/v1/systemone"
+model = "jev-1.13.0"
+api_key_env = "TYPESAFE_API_KEY"
+timeout_seconds = 10
+
+[ollama]
+enabled = false
+endpoint = "http://127.0.0.1:11434/api/chat"
+# Set this to an existing local model before enabling.
+model = ""
+timeout_seconds = 15
+explain_below_confidence = 0.9
+
+# Opt-in example only. Evaluate the classifier against labeled traffic first.
+# [[automation]]
+# process = "/usr/bin/curl"
+# uid = 1000
+# ip = "127.0.0.1"
+# port = 8000
+# protocol = "tcp"
+# category = "development"
+# action = "allow"
+# min_confidence = 0.99

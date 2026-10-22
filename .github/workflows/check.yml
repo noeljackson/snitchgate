@@ -1,0 +1,21 @@
+name: Rust checks
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: System build dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libsqlite3-dev
+      - name: Rust toolchain
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          rustup default stable
+      - name: Check
+        run: make check
