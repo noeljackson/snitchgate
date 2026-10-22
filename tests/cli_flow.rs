@@ -187,7 +187,7 @@ async fn binary_jev_classification_and_ollama_explanation_require_manual_review(
     let jev = root.path().join("jev.sock");
     let ollama = root.path().join("ollama.sock");
     let jev_task = mock_provider(&jev, json!({"model":"jev-fixture", "answers":{"category":{"type":"choice","choice":"development","confidence":0.95}}})).await;
-    let llm_task = mock_provider(&ollama, json!({"model":"llm-fixture","message":{"content":"{\"explanation\":\"A loopback HTTP request; intent is uncertain.\"}"}})).await;
+    let llm_task = mock_provider(&ollama, json!({"model":"llm-fixture","done":true,"done_reason":"stop","message":{"content":"{\"explanation\":\"A loopback HTTP request; intent is uncertain.\"}"}})).await;
     let config = root.path().join("config.toml");
     std::fs::write(&config, format!("[jev]\nenabled = true\nendpoint = \"http://127.0.0.1/api\"\nunix_socket = {jev:?}\n[ollama]\nenabled = true\nendpoint = \"http://127.0.0.1/api\"\nunix_socket = {ollama:?}\nmodel = \"llm-fixture\"\n")).unwrap();
     let (mut service, control, grpc) = start(root.path(), Some(&config)).await;

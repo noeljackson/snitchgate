@@ -63,6 +63,7 @@ pub struct OllamaConfig {
     pub timeout_seconds: u64,
     pub explain_below_confidence: f64,
     pub unix_socket: Option<PathBuf>,
+    pub think: bool,
 }
 impl Default for OllamaConfig {
     fn default() -> Self {
@@ -73,6 +74,7 @@ impl Default for OllamaConfig {
             timeout_seconds: 15,
             explain_below_confidence: 0.9,
             unix_socket: None,
+            think: false,
         }
     }
 }

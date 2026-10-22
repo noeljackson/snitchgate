@@ -1,0 +1,26 @@
+{
+  "phase": "final-c1 first attempt",
+  "complete_run": false,
+  "observation": "Three requests reached the 30-second benchmark timeout without a completed inference result; the phase was aborted. Ollama HTTP API remained reachable but listed no loaded models. Ollama was retrying a runner port after that runner had exited.",
+  "resolution": "Added and hot-loaded exact user/process/loopback constraints for Ollama API and ephemeral runner ports, then restarted only the experiment-owned Ollama server. Successful rerun metrics are stored separately.",
+  "samples_observed_before_abort": [
+    {
+      "case": "curl-loopback",
+      "repeat": 0,
+      "latency_seconds": 30.002,
+      "schema_valid": false
+    },
+    {
+      "case": "curl-loopback",
+      "repeat": 1,
+      "latency_seconds": 30.002,
+      "schema_valid": false
+    },
+    {
+      "case": "browser-https",
+      "repeat": 1,
+      "latency_seconds": 30.002,
+      "schema_valid": false
+    }
+  ]
+}

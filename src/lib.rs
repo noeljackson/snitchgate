@@ -1,3 +1,4 @@
+pub mod benchmark;
 pub mod broker;
 pub mod config;
 pub mod ipc;

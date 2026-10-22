@@ -97,6 +97,17 @@ fields as untrusted data. Provider errors, invalid output, redirects, response
 size limits, concurrency limits, and timeouts lead to manual review. Provider
 error bodies are never saved or displayed.
 
+For Qwen3.5:9b, keep `think = false` (the default). Snitchgate limits explanations
+to 256 generated tokens and a 4096-token context; thinking can exhaust the output
+budget before returning JSON. Truncated responses are rejected. The prompt asks
+for observed facts and uncertainty and explicitly treats Jev's category/confidence
+as model opinions, rather than evidence about rule matches or binary identity.
+
+Run `snitchgate benchmark --help` for the reproducible local benchmark. See
+[benchmarks/README.md](benchmarks/README.md) for the synthetic dataset, load and
+burst measurements, and limitations. It does not send live firewall data to a
+model or change decisions.
+
 Both provider sections accept an optional absolute `unix_socket` path for a
 local HTTP proxy. The endpoint still sets the HTTP request URL; HTTPS continues
 to use TLS over that socket. Binary integration tests use private Unix-socket

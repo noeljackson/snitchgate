@@ -22,6 +22,8 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
+    /// Benchmark the production explanation prompt against synthetic local fixtures.
+    Benchmark(snitchgate::benchmark::Args),
     /// Run isolated service sockets; does not change OpenSnitch settings.
     Serve {
         #[arg(long)]
@@ -139,6 +141,7 @@ async fn shutdown_signal() {
 #[tokio::main(worker_threads = 2)]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Commands::Benchmark(args) => snitchgate::benchmark::run(args).await,
         Commands::Serve {
             config: path,
             runtime_dir,

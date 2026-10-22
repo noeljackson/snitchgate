@@ -1,0 +1,10 @@
+{
+  "input": "synthetic curl TCP loopback request; no live firewall event",
+  "jev_model": "jev-1.13.0",
+  "category": "unknown",
+  "explanation_model": "qwen3.5:9b",
+  "pipeline_seconds": 1.429,
+  "automatic_scopes": 0,
+  "explicit_response": "deny once",
+  "model_warm": true
+}

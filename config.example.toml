@@ -18,6 +18,8 @@ endpoint = "http://127.0.0.1:11434/api/chat"
 model = ""
 timeout_seconds = 15
 explain_below_confidence = 0.9
+# Short explanations need the output budget for their answer, not thinking.
+think = false
 
 # Opt-in example only. Evaluate the classifier against labeled traffic first.
 # [[automation]]
