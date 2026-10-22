@@ -86,6 +86,7 @@ impl Slack {
         .await
         .map_err(|_| anyhow!("Slack socket connection timed out"))?
         .map_err(|_| anyhow!("Slack socket connection failed"))?;
+        eprintln!("Slack Socket Mode connected.");
         forward_socket(&mut socket, events).await
     }
 }
@@ -305,10 +306,8 @@ pub async fn run(args: Options) -> Result<()> {
         !config.approvals.slack.approvers.is_empty(),
         "set [approvals.slack].approvers to trusted Slack user IDs"
     );
-    let bot_token = std::env::var(&config.approvals.slack.bot_token_env)
-        .context("Slack bot token environment variable is not set")?;
-    let app_token = std::env::var(&config.approvals.slack.app_token_env)
-        .context("Slack app token environment variable is not set")?;
+    let bot_token = crate::credentials::read(&config.approvals.slack.bot_token_env)?;
+    let app_token = crate::credentials::read(&config.approvals.slack.app_token_env)?;
     ensure!(
         bot_token.starts_with("xoxb-") && app_token.starts_with("xapp-"),
         "use a bot token (xoxb) and a Socket Mode app token (xapp)"

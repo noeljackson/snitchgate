@@ -171,9 +171,27 @@ Hosted Jev still receives the whitelisted network metadata when enabled.
 
 Create a Slack app using [slack-app-manifest.json](slack-app-manifest.json), install
 it in your workspace, and generate an app-level token with `connections:write`.
-Keep the bot token in `SLACK_BOT_TOKEN` (`xoxb-...`) and the app token in
-`SLACK_APP_TOKEN` (`xapp-...`) through your credential manager. Tokens never go in
-config files or CLI arguments. Slack CLI login is separate from these credentials.
+Provide the bot token as `SLACK_BOT_TOKEN` (`xoxb-...`) and the app token as
+`SLACK_APP_TOKEN` (`xapp-...`) through your credential manager. Each credential
+also accepts a `_FILE` reference, such as `SLACK_BOT_TOKEN_FILE=/path/to/credential`;
+Jev supports `TYPESAFE_API_KEY_FILE` too (using its configured key variable name).
+Explicit file references take precedence and fail closed if unreadable. Files
+must be regular, owned by this user, private, and at most 64 KiB. Linux sealed
+memfd references work, as do systemd credential files supplied through `_FILE`.
+Tokens never go in config files or CLI arguments. Slack CLI login is separate
+from these credentials. The application has no OpenBao dependency or scripts.
+
+On Noelarchy, the external launcher owns retrieval and delivers only the two
+Slack fields from `personal/snitchgate`, without globally exporting them:
+
+```sh
+bao-app run snitchgate-slack -- ./target/debug/snitchgate approvals --config config.local.toml
+```
+
+The separate `bao-app run snitchgate -- ...` profile keeps only the existing Jev
+key from the calling environment and performs no OpenBao lookup. These launchers
+live in Noelarchy; other installations can supply credentials through their own
+process supervisor or secret manager.
 
 Configure your trusted Slack user IDs (the default is an empty allowlist):
 

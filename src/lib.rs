@@ -2,6 +2,7 @@ pub mod approvals;
 pub mod benchmark;
 pub mod broker;
 pub mod config;
+pub mod credentials;
 pub mod ipc;
 pub mod model;
 pub mod observe;

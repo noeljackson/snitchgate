@@ -98,8 +98,7 @@ pub async fn classify(
     config: &JevConfig,
     connection: &Connection,
 ) -> Result<Assessment> {
-    let key = std::env::var(&config.api_key_env)
-        .context("Jev API key environment variable is missing")?;
+    let key = crate::credentials::read(&config.api_key_env)?;
     ensure!(!key.trim().is_empty(), "Jev API key is empty");
     classify_with_key(client, config, connection, &key).await
 }

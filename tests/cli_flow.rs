@@ -105,6 +105,7 @@ async fn mock_provider(path: &Path, body: Value) -> tokio::task::JoinHandle<Valu
         let (stream, _) = listener.accept().await.unwrap();
         let mut stream = BufReader::new(stream);
         let mut length = 0;
+        let mut authorization = None;
         loop {
             let mut line = String::new();
             stream.read_line(&mut line).await.unwrap();
@@ -114,6 +115,12 @@ async fn mock_provider(path: &Path, body: Value) -> tokio::task::JoinHandle<Valu
             if let Some(value) = line.to_lowercase().strip_prefix("content-length:") {
                 length = value.trim().parse().unwrap();
             }
+            if let Some(value) = line.to_lowercase().strip_prefix("authorization:") {
+                authorization = Some(value.trim().to_owned());
+            }
+        }
+        if body["model"] == "jev-fixture" {
+            assert_eq!(authorization.as_deref(), Some("bearer fixture-key"));
         }
         let mut request = vec![0; length];
         stream.read_exact(&mut request).await.unwrap();
@@ -281,6 +288,13 @@ async fn binary_live_observer_redacts_metadata_and_records_only_dry_run() {
     let config = root.path().join("config.toml");
     std::fs::write(&config,format!("[jev]\nenabled=true\nendpoint='http://127.0.0.1/api'\nunix_socket={jev:?}\n[ollama]\nenabled=true\nendpoint='http://127.0.0.1/api'\nunix_socket={ollama:?}\nmodel='qwen-fixture'\n")).unwrap();
     let state = root.path().join("state");
+    let credential = root.path().join("jev-credential");
+    std::fs::write(&credential, "fixture-key").unwrap();
+    std::fs::set_permissions(
+        &credential,
+        std::os::unix::fs::PermissionsExt::from_mode(0o600),
+    )
+    .unwrap();
     let output = Command::new(BIN)
         .args(["observe", "--config"])
         .arg(config)
@@ -296,7 +310,8 @@ async fn binary_live_observer_redacts_metadata_and_records_only_dry_run() {
             "--max-classifications",
             "2",
         ])
-        .env("TYPESAFE_API_KEY", "fixture-key")
+        .env("TYPESAFE_API_KEY", "wrong-ambient-key")
+        .env("TYPESAFE_API_KEY_FILE", &credential)
         .output()
         .await
         .unwrap();
