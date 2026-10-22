@@ -123,6 +123,7 @@ mod tests {
             ip: "127.0.0.1".parse().unwrap(),
             host: String::new(),
             port: 8000,
+            url_hints: vec![],
         }
     }
     #[test]

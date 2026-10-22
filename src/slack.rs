@@ -178,6 +178,7 @@ fn card(review: &Review, nonce: Option<&str>, outcome: Option<&str>) -> Value {
     let mut blocks = vec![
         json!({"type":"header","text":{"type":"plain_text","text":title}}),
         json!({"type":"section","text":{"type":"plain_text","text":facts}}),
+        json!({"type":"section","text":{"type":"plain_text","text":connection.resource_details()}}),
         json!({"type":"section","text":{"type":"plain_text","text":format!("Model explanation (untrusted): {explanation}")}}),
         json!({"type":"section","text":{"type":"plain_text","text":instruction}}),
     ];
@@ -483,7 +484,7 @@ mod tests {
             bot_token: "xoxb-fixture".into(),
             app_token: "xapp-fixture".into(),
         });
-        let review = Review {
+        let mut review = Review {
             entry: crate::model::Entry {
                 id: "fixture".into(),
                 connection: crate::broker::demo_connection(
@@ -501,6 +502,20 @@ mod tests {
             },
             dry_run: true,
         };
+        assert!(
+            card(&review, Some("nonce"), None)
+                .to_string()
+                .contains("URL/file: unavailable")
+        );
+        review.entry.connection = crate::model::Connection::try_from(crate::protocol::Connection {
+            process_path: "/tmp/<@everyone>".into(),
+            dst_ip: "192.0.2.1".into(),
+            dst_host: "gist.githubusercontent.com".into(),
+            dst_port: 443,
+            protocol: "tcp".into(),
+            process_args: vec!["https://user:SECRET_PASSWORD@gist.githubusercontent.com/noel/123/raw/revision/setup.sh?token=SECRET_QUERY#SECRET_FRAGMENT".into()],
+            ..Default::default()
+        }).unwrap();
         assert_eq!(
             slack.post("C1", &review, "nonce").await.unwrap(),
             "100.000001"
@@ -510,6 +525,10 @@ mod tests {
         let requests = server.await.unwrap();
         assert_eq!(requests[0]["mrkdwn"], false);
         assert_eq!(requests[0]["unfurl_links"], false);
+        let rendered = requests[0].to_string();
+        assert!(rendered.contains("/noel/123/raw/revision/setup.sh"));
+        assert!(rendered.contains("unverified"));
+        assert!(!rendered.contains("SECRET"));
         for block in requests[0]["blocks"].as_array().unwrap() {
             if block["type"] == "section" {
                 assert_eq!(block["text"]["type"], "plain_text");

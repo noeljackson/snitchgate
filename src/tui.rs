@@ -79,8 +79,12 @@ impl App {
             .iter()
             .filter(|e| {
                 format!(
-                    "{} {} {} {}",
-                    e.connection.process, e.connection.host, e.connection.ip, e.connection.port
+                    "{} {} {} {} {}",
+                    e.connection.process,
+                    e.connection.host,
+                    e.connection.ip,
+                    e.connection.port,
+                    e.connection.url_hints.join(" ")
                 )
                 .to_lowercase()
                 .contains(&query)
@@ -270,7 +274,7 @@ pub fn draw(frame: &mut Frame<'_>, app: &mut App, snapshot: &Snapshot) {
                 let c = &entry.connection;
                 let assessment = entry.assessment.as_ref().map(|a| format!("{:?} · {:.1}% confidence\nJev: {}\nLLM: {}\n\n{}", a.category, a.confidence * 100.0, a.model, a.llm_model.as_deref().unwrap_or("not used"), a.explanation)).unwrap_or_else(|| if entry.verdict.is_some() { "No model classification was used.".into() } else { "Awaiting manual review.\n\nClassification does not grant permission.\nAllow and deny decisions are temporary.".into() });
                 let verdict = entry.verdict.as_ref().map(|v| format!("\n\nDecision: {} / {}\nSource: {}\n{}", v.action.as_str(), v.duration.as_str(), v.source, v.reason)).unwrap_or_default();
-                format!("Process\n{}\n\nUID {}  ·  PID {}\n{}://{}:{}\nHost: {}\n\n{}\nStatus: {}{}\n\nRequest {}", display_text(&c.process), c.uid, c.pid, c.protocol, c.ip, c.port, display_text(&c.host), assessment, entry.classifier_status, verdict, entry.id)
+                format!("Process\n{}\n\nUID {}  ·  PID {}\n{}://{}:{}\nHost: {}\n\n{}\n\n{}\nStatus: {}{}\n\nRequest {}", display_text(&c.process), c.uid, c.pid, c.protocol, c.ip, c.port, display_text(&c.host), c.resource_details(), assessment, entry.classifier_status, verdict, entry.id)
             }
             None => "No requests here.\n\nWaiting for OpenSnitch, or change the filter.\n\nUse `snitchgate mock` against the isolated socket to send a test request.".into(),
         };

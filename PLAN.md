@@ -46,6 +46,9 @@ Captured hostname and executable path do not prove identity or intent.
 - Transport-independent approval source/adapter contracts and a Slack Socket Mode
   adapter with channel registration, trusted approvers, Yes/No buttons and exact
   threaded replies, expiry, duplicate rejection, and persistent delivery state.
+- Bounded destination-matching command-line URL hints in live Slack cards and
+  TUI inspection, with user info/query/fragment removal and explicit missing-data
+  labels. Hints stay outside both model inputs and all permission scopes.
 
 The observer reads already-decided GUI events and never connects to the daemon.
 Its approvals record feedback only. Explicit `approvals --live` reviews actual

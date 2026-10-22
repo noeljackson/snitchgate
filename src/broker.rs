@@ -319,6 +319,7 @@ pub fn demo_connection(process: &str, host: &str, ip: &str, port: u16) -> Connec
         ip: ip.parse().expect("fixture IP"),
         host: host.into(),
         port,
+        url_hints: vec![],
     }
 }
 

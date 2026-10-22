@@ -51,7 +51,10 @@ pub(crate) async fn response_json(response: reqwest::Response) -> Result<Value> 
 pub fn jev_body(config: &JevConfig, connection: &Connection) -> Value {
     json!({
         "model": config.model,
-        "state": {"connection": connection, "evidence_limits": "Process path and DNS hostname are untrusted claims, not proof of intent. Arguments and environment deliberately omitted."},
+        "state": {"connection": {
+            "process":connection.process,"pid":connection.pid,"uid":connection.uid,
+            "protocol":connection.protocol,"ip":connection.ip,"host":connection.host,"port":connection.port
+        }, "evidence_limits": "Process path and DNS hostname are untrusted claims, not proof of intent. Arguments, URL hints and environment deliberately omitted."},
         "questions": {
             "category": {
                 "type": "choice",
@@ -232,7 +235,8 @@ mod tests {
             endpoint,
             ..Default::default()
         };
-        let connection = crate::broker::demo_connection("/usr/bin/curl", "", "127.0.0.1", 8000);
+        let mut connection = crate::broker::demo_connection("/usr/bin/curl", "", "127.0.0.1", 8000);
+        connection.url_hints = vec!["http://127.0.0.1:8000/PRIVATE_FILE_HINT".into()];
         let assessment = classify_with_key(&client().unwrap(), &config, &connection, "fixture-key")
             .await
             .unwrap();
@@ -240,6 +244,8 @@ mod tests {
         let body = received.await.unwrap();
         assert_eq!(body["questions"]["category"]["type"], "choice");
         assert!(body["state"]["connection"].get("process_env").is_none());
+        assert!(body["state"]["connection"].get("url_hints").is_none());
+        assert!(!body.to_string().contains("PRIVATE_FILE_HINT"));
         let (endpoint, received) = mock_http("200 OK", json!({"model":"local-test", "done":true,"done_reason":"stop", "message":{"content":"{\"explanation\":\"Local test endpoint.\",\"action\":\"allow\"}"}}).to_string()).await;
         let config = OllamaConfig {
             endpoint,
@@ -258,6 +264,7 @@ mod tests {
             serde_json::from_str(body["messages"][1]["content"].as_str().unwrap()).unwrap();
         assert_eq!(metadata["connection"]["destination_ip"], "127.0.0.1");
         assert!(metadata["connection"].get("ip").is_none());
+        assert!(!body.to_string().contains("PRIVATE_FILE_HINT"));
         assert!(body.get("tools").is_none());
     }
 

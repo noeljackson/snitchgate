@@ -103,7 +103,8 @@ No provider calls are made by `check-config`.
 Jev receives only process path, PID, UID, protocol, destination IP/host, and port.
 It returns a category and confidence. Categories are `expected`, `development`,
 `telemetry`, `suspicious`, and `unknown`. Arguments, environment, working directory,
-raw alerts, and daemon configuration are discarded at the protocol boundary.
+raw alerts, and daemon configuration are discarded at the protocol boundary,
+apart from bounded, sanitized URL hints reserved for human inspection below.
 The remaining metadata still reveals application and network activity to an
 enabled hosted provider.
 
@@ -251,6 +252,23 @@ so it needs outbound HTTPS/WebSocket access and no public inbound endpoint.
 The manifest requests posting, mentions, and message events in joined public and
 private channels so plain threaded replies work; messages unrelated to a tracked
 request are ignored. Metadata is rendered as plain text, without unfurling links.
+
+Live Slack cards and TUI inspection also show URL/path hints when an HTTP(S)
+URL is a standalone process argument and its hostname (or literal IP) and port
+match the captured destination. A raw Gist URL can therefore show the Gist ID,
+revision, and filename. User info, query strings, and fragments are removed;
+only three distinct URLs of at most 768 bytes are retained. Paths can still
+contain sensitive identifiers: these hints are stored locally with the review
+and sent to the registered Slack channel, but **never to Jev or Ollama**.
+Other arguments and environment values are discarded. The dry-run observer
+continues to exclude arguments entirely and has no URL hints.
+
+Hints are unverified process claims, not observed HTTP requests. OpenSnitch has
+no HTTP URL field; HTTPS encrypts the path. Requests made inside a browser or
+application, embedded script URLs, redirects, and filenames absent from the
+captured URL may therefore be unavailable. Cards state when the URL/file is
+unavailable. Snitchgate never fetches a URL to discover a filename or inspect
+contents, and approval still covers the **connection**, not a particular file.
 
 `approvals --live` explicitly selects actual pending requests on the broker's
 private control socket; `--socket PATH` can choose an isolated broker. Yes allows

@@ -209,7 +209,9 @@ mod tests {
                     protocol: "tcp".into(),
                     dst_ip: "127.0.0.1".into(),
                     dst_port: 8000,
+                    dst_host: "gist.githubusercontent.com".into(),
                     process_path: "/usr/bin/curl".into(),
+                    process_args: vec!["http://gist.githubusercontent.com:8000/noel/123/raw/abc/script.sh?token=SECRET_QUERY".into()],
                     user_id: 1000,
                     ..Default::default()
                 })
@@ -220,6 +222,10 @@ mod tests {
         let id = tokio::time::timeout(std::time::Duration::from_secs(2), async {
             loop {
                 if let Some(entry) = broker.snapshot().unwrap().pending.first() {
+                    assert_eq!(
+                        entry.connection.url_hints,
+                        ["http://gist.githubusercontent.com:8000/noel/123/raw/abc/script.sh"]
+                    );
                     break entry.id.clone();
                 }
                 tokio::task::yield_now().await;
@@ -237,7 +243,11 @@ mod tests {
         let rule = asking.await.unwrap();
         assert_eq!(rule.action, "allow");
         assert_eq!(rule.duration, "once");
-        assert_eq!(rule.operator.unwrap().list.len(), 5);
+        let operators = rule.operator.unwrap().list;
+        assert_eq!(operators.len(), 5);
+        assert!(operators.iter().all(|op| !op.data.contains("script.sh")
+            && !op.data.contains("SECRET_QUERY")
+            && op.operand != "process.command"));
         assert_eq!(
             broker.snapshot().unwrap().health.daemon.as_deref(),
             Some("mock-host")
