@@ -189,6 +189,26 @@ impl Broker {
         })
     }
 
+    pub fn remote_decide(&self, id: &str, action: Action, actor: &str) -> Result<()> {
+        ensure!(
+            !actor.is_empty()
+                && actor.len() <= 128
+                && actor
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, ':' | '-' | '_')),
+            "invalid approver identity"
+        );
+        self.finish(
+            id,
+            Verdict {
+                action,
+                duration: Duration::Once,
+                source: "human".into(),
+                reason: format!("Explicit remote approval by {actor}"),
+            },
+        )
+    }
+
     pub fn ping(&self) {
         self.state.lock().expect("broker lock").health.last_ping = Some(now());
     }

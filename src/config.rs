@@ -16,6 +16,7 @@ pub struct Config {
     pub jev: JevConfig,
     pub ollama: OllamaConfig,
     pub automation: Vec<Scope>,
+    pub approvals: ApprovalConfig,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -27,6 +28,41 @@ impl Default for Config {
             jev: JevConfig::default(),
             ollama: OllamaConfig::default(),
             automation: vec![],
+            approvals: ApprovalConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ApprovalConfig {
+    pub review_below_confidence: f64,
+    pub review_ttl_seconds: u64,
+    pub slack: SlackConfig,
+}
+impl Default for ApprovalConfig {
+    fn default() -> Self {
+        Self {
+            review_below_confidence: 0.9,
+            review_ttl_seconds: 900,
+            slack: SlackConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SlackConfig {
+    pub bot_token_env: String,
+    pub app_token_env: String,
+    pub approvers: Vec<String>,
+}
+impl Default for SlackConfig {
+    fn default() -> Self {
+        Self {
+            bot_token_env: "SLACK_BOT_TOKEN".into(),
+            app_token_env: "SLACK_APP_TOKEN".into(),
+            approvers: vec![],
         }
     }
 }
@@ -103,6 +139,24 @@ impl Config {
         Ok(config)
     }
     pub fn validate(&self) -> Result<()> {
+        ensure!(
+            (0.0..=1.0).contains(&self.approvals.review_below_confidence),
+            "invalid review threshold"
+        );
+        ensure!(
+            (30..=3600).contains(&self.approvals.review_ttl_seconds),
+            "review TTL must be 30..3600 seconds"
+        );
+        ensure!(
+            self.approvals
+                .slack
+                .approvers
+                .iter()
+                .all(|id| id.starts_with('U')
+                    && id.len() <= 32
+                    && id.chars().all(|c| c.is_ascii_alphanumeric())),
+            "invalid Slack approver ID"
+        );
         ensure!(
             (1..=100).contains(&self.request_timeout_seconds),
             "request timeout must be 1..100 seconds (daemon deadline is 120s)"

@@ -21,6 +21,17 @@ explain_below_confidence = 0.9
 # Short explanations need the output budget for their answer, not thinking.
 think = false
 
+[approvals]
+# Illustrative threshold, not a calibrated probability of safety.
+review_below_confidence = 0.9
+review_ttl_seconds = 900
+
+[approvals.slack]
+bot_token_env = "SLACK_BOT_TOKEN"
+app_token_env = "SLACK_APP_TOKEN"
+# Required before running `snitchgate approvals`; no one is authorized by default.
+approvers = []
+
 # Opt-in example only. Evaluate the classifier against labeled traffic first.
 # [[automation]]
 # process = "/usr/bin/curl"

@@ -28,6 +28,11 @@ pub enum Command {
         action: Action,
         duration: Duration,
     },
+    RemoteDecide {
+        id: String,
+        action: Action,
+        actor: String,
+    },
     Propose {
         id: String,
         description: String,
@@ -142,6 +147,9 @@ async fn handle(stream: UnixStream, broker: Arc<Broker>) -> Result<()> {
                 action,
                 duration,
             } => broker.decide(&id, action, duration)?,
+            Command::RemoteDecide { id, action, actor } => {
+                broker.remote_decide(&id, action, &actor)?
+            }
             Command::Propose { id, description } => {
                 let entry = broker.entry(&id)?;
                 let verdict = entry

@@ -1,11 +1,14 @@
+pub mod approvals;
 pub mod benchmark;
 pub mod broker;
 pub mod config;
 pub mod ipc;
 pub mod model;
+pub mod observe;
 pub mod policy;
 pub mod providers;
 pub mod server;
+pub mod slack;
 pub mod store;
 pub mod tui;
 

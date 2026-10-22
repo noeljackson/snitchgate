@@ -22,6 +22,10 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
+    /// Classify live GUI events read-only, with a bounded budget and no firewall decisions.
+    Observe(snitchgate::observe::Options),
+    /// Run Slack approvals over Socket Mode (dry-run feedback unless --live).
+    Approvals(snitchgate::slack::Options),
     /// Benchmark the production explanation prompt against synthetic local fixtures.
     Benchmark(snitchgate::benchmark::Args),
     /// Run isolated service sockets; does not change OpenSnitch settings.
@@ -141,6 +145,8 @@ async fn shutdown_signal() {
 #[tokio::main(worker_threads = 2)]
 async fn main() -> Result<()> {
     match Cli::parse().command {
+        Commands::Observe(args) => snitchgate::observe::run(args).await,
+        Commands::Approvals(args) => snitchgate::slack::run(args).await,
         Commands::Benchmark(args) => snitchgate::benchmark::run(args).await,
         Commands::Serve {
             config: path,

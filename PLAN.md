@@ -13,7 +13,7 @@ OpenSnitch daemon -- gRPC / Unix socket --> broker -- SQLite decision history
                                                         |
                                               Ollama explanation
                                                         |
-                                  Ratatui <-- private control socket
+                           Ratatui / approval adapters <-- private control socket
                                                         |
                                             staged JSON proposal
 ```
@@ -41,6 +41,18 @@ Captured hostname and executable path do not prove identity or intent.
 - Opt-in exact automation scopes, automatically deciding once only.
 - Explicit human-decision export into a staged durable JSON rule proposal.
 - Protocol, policy, persistence, IPC, provider, and TUI rendering tests.
+- Bounded read-only live GUI database observer, redacted metadata ingestion,
+  private dry-run classifications, and durable human feedback.
+- Transport-independent approval source/adapter contracts and a Slack Socket Mode
+  adapter with channel registration, trusted approvers, Yes/No buttons and exact
+  threaded replies, expiry, duplicate rejection, and persistent delivery state.
+
+The observer reads already-decided GUI events and never connects to the daemon.
+Its approvals record feedback only. Explicit `approvals --live` reviews actual
+pending broker requests once; it does not perform daemon handover. Neither
+confidence nor a chat response creates permanent policy. Telegram is a future
+transport adapter. Slack needs separate bot/app credentials and an authorized
+channel registration before it can post.
 
 ## Next milestones
 

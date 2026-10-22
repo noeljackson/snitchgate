@@ -263,3 +263,112 @@ async fn binary_automation_uses_configured_scope_and_denies_pending_on_shutdown(
             .contains("deny / once")
     );
 }
+
+#[tokio::test]
+async fn binary_live_observer_redacts_metadata_and_records_only_dry_run() {
+    let root = tempfile::tempdir().unwrap();
+    let source = root.path().join("ui.sqlite3");
+    let db = rusqlite::Connection::open(&source).unwrap();
+    db.execute_batch("CREATE TABLE connections(process TEXT,pid TEXT,uid TEXT,protocol TEXT,dst_ip TEXT,dst_host TEXT,dst_port TEXT,action TEXT,process_args TEXT,process_cwd TEXT);
+        INSERT INTO connections VALUES('/usr/bin/curl','123','1000','tcp6','::1','localhost','8000','deny','SECRET_TOKEN','PRIVATE_CWD');
+        INSERT INTO connections SELECT * FROM connections;").unwrap();
+    drop(db);
+    let before = std::fs::read(&source).unwrap();
+    let jev = root.path().join("jev.sock");
+    let ollama = root.path().join("ollama.sock");
+    let j=mock_provider(&jev,json!({"model":"jev-fixture","answers":{"category":{"type":"choice","choice":"unknown","confidence":0.99}}})).await;
+    let q=mock_provider(&ollama,json!({"model":"qwen-fixture","done":true,"done_reason":"stop","message":{"content":"{\"explanation\":\"Intent is uncertain.\"}"}})).await;
+    let config = root.path().join("config.toml");
+    std::fs::write(&config,format!("[jev]\nenabled=true\nendpoint='http://127.0.0.1/api'\nunix_socket={jev:?}\n[ollama]\nenabled=true\nendpoint='http://127.0.0.1/api'\nunix_socket={ollama:?}\nmodel='qwen-fixture'\n")).unwrap();
+    let state = root.path().join("state");
+    let output = Command::new(BIN)
+        .args(["observe", "--config"])
+        .arg(config)
+        .arg("--db")
+        .arg(&source)
+        .arg("--state-dir")
+        .arg(&state)
+        .args([
+            "--seconds",
+            "2",
+            "--recent",
+            "10",
+            "--max-classifications",
+            "2",
+        ])
+        .env("TYPESAFE_API_KEY", "fixture-key")
+        .output()
+        .await
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let summary: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(summary["dry_run"], true);
+    assert_eq!(summary["classified"], 1);
+    assert_eq!(summary["duplicates"], 1);
+    assert_eq!(summary["review_needed"], 1);
+    for request in [j.await.unwrap(), q.await.unwrap()] {
+        let text = request.to_string();
+        assert!(!text.contains("SECRET_TOKEN") && !text.contains("PRIVATE_CWD"));
+    }
+    assert_eq!(std::fs::read(source).unwrap(), before);
+    let db = rusqlite::Connection::open(state.join("observations.sqlite3")).unwrap();
+    let entry: String = db
+        .query_row("SELECT entry FROM observations", [], |r| r.get(0))
+        .unwrap();
+    let entry: snitchgate::model::Entry = serde_json::from_str(&entry).unwrap();
+    assert!(entry.verdict.is_none());
+    assert_eq!(
+        entry.assessment.unwrap().llm_model.as_deref(),
+        Some("qwen-fixture")
+    );
+}
+
+#[tokio::test]
+async fn binary_remote_decision_is_once_audited_and_cannot_be_replayed() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut service, control, grpc) = start(root.path(), None).await;
+    let mut mock = Command::new(BIN);
+    mock.arg("mock").arg("--socket").arg(&grpc);
+    let response = tokio::spawn(async move { mock.output().await.unwrap() });
+    let entry = pending(&control, false).await;
+    ipc::request(
+        &control,
+        IpcCommand::RemoteDecide {
+            id: entry.id.clone(),
+            action: Action::Allow,
+            actor: "slack:T1:U1".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        ipc::request(
+            &control,
+            IpcCommand::RemoteDecide {
+                id: entry.id,
+                action: Action::Deny,
+                actor: "slack:T1:U1".into()
+            }
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        String::from_utf8(response.await.unwrap().stdout)
+            .unwrap()
+            .contains("allow / once")
+    );
+    let snapshot = ipc::request(&control, IpcCommand::Snapshot)
+        .await
+        .unwrap()
+        .snapshot
+        .unwrap();
+    let verdict = snapshot.history[0].verdict.as_ref().unwrap();
+    assert_eq!(verdict.source, "human");
+    assert!(verdict.reason.contains("slack:T1:U1"));
+    stop(&mut service, &control, &grpc).await;
+}

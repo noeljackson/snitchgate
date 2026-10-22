@@ -113,8 +113,10 @@ local HTTP proxy. The endpoint still sets the HTTP request URL; HTTPS continues
 to use TLS over that socket. Binary integration tests use private Unix-socket
 HTTP fixtures so they need no host firewall exceptions.
 
-Classification alone is observation mode. There are no automation scopes by
-default. An explicit `[[automation]]` entry must match **all** of exact executable
+Classification alone leaves decisions manual. `serve` still answers requests and
+denies unanswered requests once at their deadline; use `observe` below for a
+passive live dry run. There are no automation scopes by default. An explicit
+`[[automation]]` entry must match **all** of exact executable
 path, UID, destination IP, port, protocol, category, and confidence threshold.
 Automatic decisions always use `once`. Conflicting scopes and `unknown`
 classifications require review. Thresholds must be evaluated against labeled
@@ -123,6 +125,117 @@ traffic; the example threshold is illustrative, not an established safety level.
 Classifier endpoints need narrowly scoped, reviewed network access before live
 handover, so the broker does not wait on its own API requests. If that access
 fails, requests remain available for manual decisions and eventually deny once.
+
+## Dry run with live traffic
+
+Enable Jev and optionally a local Ollama model in your private config:
+
+```toml
+[jev]
+enabled = true
+[ollama]
+enabled = true
+model = "qwen3.5:9b"
+think = false
+```
+
+Supply `TYPESAFE_API_KEY` through your credential environment, then run:
+
+```sh
+./target/debug/snitchgate observe --config config.local.toml \
+  --seconds 60 --max-classifications 10 --recent 20
+```
+
+The observer reads connection events from the existing OpenSnitch GUI's SQLite
+database in **read-only mode**. It discovers the active `ui*.sqlite3` file by its
+latest event, including rotated databases; `--db PATH` selects one explicitly.
+By default it follows new rows only; `--recent 20` also samples twenty recent
+rows. This samples events already handled by OpenSnitch, rather than intercepting
+pending requests. The GUI stays in control, and the observer opens no daemon or
+control sockets. Configured automation scopes are never applied here.
+
+Only process path, PID, UID, protocol, and destination IP/host/port reach providers.
+Arguments and working directories are excluded in the SQL query. IPv6 protocol
+labels are normalized; malformed or unsupported rows are skipped. Exact scopes
+are deduplicated within the run (ignoring PID), own Snitchgate/Ollama connections
+are skipped, calls run sequentially, and the invocation has a hard total
+classification budget. This is a bounded sample, not a complete traffic audit.
+
+Results go to the private 0600 `observations.sqlite3` in the Snitchgate state
+directory. `--state-dir PATH` overrides that directory for both commands below.
+The local database retains up to 10,000 samples, including the original observed
+allow/deny action and source row reference. Console output contains counts only.
+Hosted Jev still receives the whitelisted network metadata when enabled.
+
+## Slack approvals, with room for other adapters
+
+Create a Slack app using [slack-app-manifest.json](slack-app-manifest.json), install
+it in your workspace, and generate an app-level token with `connections:write`.
+Keep the bot token in `SLACK_BOT_TOKEN` (`xoxb-...`) and the app token in
+`SLACK_APP_TOKEN` (`xapp-...`) through your credential manager. Tokens never go in
+config files or CLI arguments. Slack CLI login is separate from these credentials.
+
+Configure your trusted Slack user IDs (the default is an empty allowlist):
+
+```toml
+[approvals]
+review_below_confidence = 0.9
+review_ttl_seconds = 900
+[approvals.slack]
+approvers = ["YOUR_SLACK_USER_ID"]
+```
+
+The threshold is illustrative and uncalibrated. Unknown, suspicious, failed,
+and below-threshold classifications need review. High model confidence does
+not authorize traffic: live requests remaining after the broker's exact scope
+checks also need a human decision, regardless of confidence.
+
+Start the bot alongside the observer, using the same state directory:
+
+```sh
+./target/debug/snitchgate approvals --config config.local.toml
+```
+
+Invite the app to whichever channel you want and, as a configured approver, send:
+
+```text
+@Snitchgate approvals here
+```
+
+That channel becomes the saved destination for this workspace and mode. Another
+authorized registration can move it. Each card shows the captured scope,
+classification, explanation, deadline, and explicit **DRY RUN** label. Click
+**Yes**/**No**, or reply exactly `yes` or `no` in that card's thread. In dry-run
+mode these record **would allow / would deny** feedback only; they cannot change
+the firewall or approve future requests. Feedback expires after the configured
+TTL and records the approver identity locally.
+
+The adapter uses Slack [Socket Mode](https://docs.slack.dev/apis/events-api/using-socket-mode/),
+so it needs outbound HTTPS/WebSocket access and no public inbound endpoint.
+The manifest requests posting, mentions, and message events in joined public and
+private channels so plain threaded replies work; messages unrelated to a tracked
+request are ignored. Metadata is rendered as plain text, without unfurling links.
+
+`approvals --live` explicitly selects actual pending requests on the broker's
+private control socket; `--socket PATH` can choose an isolated broker. Yes allows
+**once**, No denies **once**, and the broker checks its original deadline again.
+It records the Slack approver with the human decision. This flag does not attach
+the broker to the live daemon; the handover criteria in PLAN.md still apply.
+Live and dry-run channel registrations use separate state databases.
+
+Reply acceptance checks workspace, configured user, original channel/thread,
+request ID, expiry, and the button's opaque nonce. Duplicate replies, edited or
+bot messages, and free-floating yes/no messages cannot decide anything. Socket
+events are acknowledged independently of processing; a full event queue drops
+work safely, and the user can retry. Reconnects preserve request deadlines.
+Delivery reservations survive bot restarts. An ambiguous posting failure is
+recorded locally and is not automatically reposted; delivery and update failures
+never grant traffic. New cards are limited to one per second and ten per minute,
+so high volume can expire before delivery. Existing TUI review remains available.
+
+`ApprovalSource`, `ApprovalAdapter`, `Review`, and `Reply` separate transport from
+decisions. A future Telegram adapter can use the same inbox, deadline, and
+one-shot decision flow. Telegram transport itself is not implemented yet.
 
 ## Durable rule proposals
 
