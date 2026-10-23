@@ -335,6 +335,13 @@ disable commands. Jev/Slack source secrets remain outside this repository.
 
 ## Development
 
+See the separate [Registrygate project](https://github.com/noeljackson/registrygate)
+for the proposed Cargo, npm, and Go package gateway, with Python next. Its
+[architecture](https://github.com/noeljackson/registrygate/blob/main/docs/architecture.md)
+uses [Tachikoma](https://github.com/noeljackson/tachikoma) as an independent
+queue-based approval service rather than depending on Snitchgate's runtime.
+This is a proposal; the running service still handles OpenSnitch network requests.
+
 ```sh
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings

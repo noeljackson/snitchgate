@@ -69,6 +69,13 @@ the full eBPF host traffic mix and operational longevity remain to be verified.
 
 ## Next milestones
 
+The proposed [Registrygate architecture](https://github.com/noeljackson/registrygate/blob/main/docs/architecture.md)
+adds artifact reviews through an independent Rust service. Cargo, npm, and Go
+come first, followed by Python. Tachikoma would own shared durable review queues,
+policy, AI assessment, chat delivery and review audit; Snitchgate would remain
+the OpenSnitch producer/enforcer. Its API and extraction plan belong to the
+[Tachikoma control plane proposal](https://github.com/noeljackson/tachikoma/blob/main/docs/queue-control-plane.md).
+
 1. **Replay and evaluation.** Import redacted OpenSnitch event samples into a
    labeled dataset, replay classification, and report false allows, unnecessary
    denies, review coverage, latency, and cost. Split by executable and destination
