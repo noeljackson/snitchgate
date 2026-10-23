@@ -9,6 +9,7 @@ pub mod observe;
 pub mod policy;
 pub mod providers;
 pub mod server;
+pub mod service;
 pub mod slack;
 pub mod store;
 pub mod tui;

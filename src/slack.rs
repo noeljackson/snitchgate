@@ -87,6 +87,7 @@ impl Slack {
         .map_err(|_| anyhow!("Slack socket connection timed out"))?
         .map_err(|_| anyhow!("Slack socket connection failed"))?;
         eprintln!("Slack Socket Mode connected.");
+        crate::service::notify("READY=1\nSTATUS=Slack connected")?;
         forward_socket(&mut socket, events).await
     }
 }
@@ -354,6 +355,10 @@ pub async fn run(args: Options) -> Result<()> {
         format!("slack:{team}"),
         &config.approvals,
     )?;
+    ensure!(
+        !crate::service::supervised() || inbox.has_route()?,
+        "register the approval channel for this workspace before starting the supervised worker"
+    );
     eprintln!(
         "Slack approvals: {mode}. Invite the bot to a channel and send @Snitchgate approvals here as a configured approver."
     );
@@ -366,6 +371,7 @@ pub async fn run(args: Options) -> Result<()> {
         loop {
             let started = tokio::time::Instant::now();
             let result = slack.connection(events.clone()).await;
+            let _ = crate::service::notify("STATUS=Slack reconnecting");
             if result.is_err() {
                 eprintln!(
                     "Slack connection unavailable; pending requests retain their original deadlines."
@@ -396,6 +402,7 @@ pub async fn run(args: Options) -> Result<()> {
         }
     }
     worker.abort();
+    let _ = crate::service::notify("STOPPING=1\nSTATUS=Slack stopping");
     Ok(())
 }
 

@@ -196,7 +196,9 @@ also accepts a `_FILE` reference, such as `SLACK_BOT_TOKEN_FILE=/path/to/credent
 Jev supports `TYPESAFE_API_KEY_FILE` too (using its configured key variable name).
 Explicit file references take precedence and fail closed if unreadable. Files
 must be regular, owned by this user, private, and at most 64 KiB. Linux sealed
-memfd references work, as do systemd credential files supplied through `_FILE`.
+memfd references work. Root-owned systemd credential files are also accepted
+only directly inside the advertised root-controlled credential directory,
+without write/other-user access; systemd may use named-user read ACLs.
 Tokens never go in config files or CLI arguments. Slack CLI login is separate
 from these credentials. The application has no OpenBao dependency or scripts.
 
@@ -313,6 +315,23 @@ For Noelarchy, review and promote appropriate proposals into its curated rules,
 run `make opensnitch-validate`, and use its documented deployment workflow.
 Snitchgate never writes `/etc`, invokes sudo, edits curated policy, restarts
 OpenSnitch, or deploys proposals. Live rules remain the daemon's responsibility.
+
+## Supervised workstation services
+
+The broker sends systemd `READY=1` when serving; Slack does so after
+authentication, a saved channel route for that workspace, and a Socket Mode
+connection. Its status becomes `Slack reconnecting` on disconnect. A supervised
+worker requires an existing route; manual launches still support initial
+registration. Notification messages contain no requests or credentials.
+
+Noelarchy owns opt-in boot units, installed release binary/configuration,
+state migration, and handover guard. Its enabled `snitchgate.target` starts
+at boot. Broker and Slack run as the owner UID with separate
+`LoadCredentialEncrypted=` files and `_FILE` references. The root guard restores
+GUI routing while the broker or Slack connection is down and resumes after
+recovery. App code does not install or enable units. See
+`/home/noel/noelarchy/docs/snitchgate-live.md` for setup, status, rotation, and
+disable commands. Jev/Slack source secrets remain outside this repository.
 
 ## Development
 

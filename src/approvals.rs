@@ -138,8 +138,10 @@ mod tests {
             &config(),
         )
         .unwrap();
+        assert!(!inbox.has_route().unwrap());
         assert!(inbox.register("OTHER", "C1", 1).is_err());
         assert!(inbox.register("U1", "C1", 2).unwrap());
+        assert!(inbox.has_route().unwrap());
         assert!(!inbox.register("U1", "OTHER", 1).unwrap());
         inbox.tick().await.unwrap();
         let nonce = adapter.posts.lock().unwrap()[0].1.clone();
@@ -370,6 +372,13 @@ impl<A: ApprovalAdapter> Inbox<A> {
     }
     pub fn trusted(&self, actor: &str) -> bool {
         self.approvers.iter().any(|id| id == actor)
+    }
+    pub fn has_route(&self) -> Result<bool> {
+        Ok(self.db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM routes WHERE namespace=?1)",
+            [&self.namespace],
+            |row| row.get(0),
+        )?)
     }
     pub fn register(&self, actor: &str, channel: &str, event_micros: u64) -> Result<bool> {
         ensure!(self.trusted(actor), "untrusted approver");

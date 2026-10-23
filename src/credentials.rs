@@ -1,6 +1,11 @@
 //! Credential values can come from an explicit private file or an environment variable.
 use anyhow::{Result, anyhow, ensure};
-use std::{fs::File, io::Read, os::unix::fs::MetadataExt, path::Path};
+use std::{
+    fs::{File, Metadata},
+    io::Read,
+    os::unix::fs::MetadataExt,
+    path::Path,
+};
 
 const MAX_SECRET: u64 = 65_536;
 
@@ -23,18 +28,39 @@ fn read_file(path: &Path) -> Result<String> {
         .metadata()
         .map_err(|_| anyhow!("credential file metadata is unavailable"))?;
     let uid = std::fs::metadata("/proc/self")?.uid();
+    let systemd_directory = std::env::var_os("CREDENTIALS_DIRECTORY");
     ensure!(
         metadata.is_file()
-            && metadata.uid() == uid
-            && metadata.mode() & 0o077 == 0
-            && metadata.len() <= MAX_SECRET,
-        "credential file must be a private regular file owned by this user"
+            && metadata.len() <= MAX_SECRET
+            && ((metadata.uid() == uid && metadata.mode() & 0o077 == 0)
+                || systemd_file(path, &metadata, systemd_directory.as_deref().map(Path::new))),
+        "credential file must be private and owned by this user or supplied by systemd"
     );
     let mut data = String::new();
     file.take(MAX_SECRET + 1)
         .read_to_string(&mut data)
         .map_err(|_| anyhow!("credential file could not be read"))?;
     validate(data.trim_end_matches(['\r', '\n']).to_owned())
+}
+
+fn systemd_file(path: &Path, metadata: &Metadata, directory: Option<&Path>) -> bool {
+    let Some(directory) = directory else {
+        return false;
+    };
+    // systemd may use root-owned 0440/0550 files/directories with a named-user
+    // read ACL. Group mask bits reflect that ACL, not a generally shared file.
+    // Only the explicitly advertised, root-controlled credential directory may
+    // use this exception; ordinary root/group-readable files remain rejected.
+    if !directory.is_absolute()
+        || path.parent() != Some(directory)
+        || metadata.uid() != 0
+        || metadata.gid() != 0
+        || metadata.mode() & 0o037 != 0
+    {
+        return false;
+    }
+    std::fs::symlink_metadata(directory)
+        .is_ok_and(|m| m.is_dir() && m.uid() == 0 && m.gid() == 0 && m.mode() & 0o027 == 0)
 }
 
 fn validate(value: String) -> Result<String> {
@@ -63,5 +89,10 @@ mod tests {
         assert!(read_file(&path).is_err());
         let error = read_file(&root.path().join("SECRET_SHOULD_NOT_APPEAR")).unwrap_err();
         assert!(!format!("{error:#}").contains("SECRET_SHOULD_NOT_APPEAR"));
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o440)).unwrap();
+        let metadata = path.metadata().unwrap();
+        assert!(!systemd_file(&path, &metadata, None));
+        assert!(!systemd_file(&path, &metadata, Some(root.path())));
+        assert!(!systemd_file(&path, &metadata, Some(Path::new("relative"))));
     }
 }

@@ -139,12 +139,14 @@ async fn serve(
             None => std::future::pending::<Result<()>>().await,
         }
     });
+    snitchgate::service::notify("READY=1\nSTATUS=Manual classification broker ready")?;
     let result: Result<()> = tokio::select! {
         result = &mut grpc_task => result.unwrap_or_else(|error| Err(error.into())),
         result = &mut ipc_task => result.unwrap_or_else(|error| Err(error.into())),
         result = &mut abstract_task => result.unwrap_or_else(|error| Err(error.into())),
         _ = shutdown_signal() => Ok(()),
     };
+    let _ = snitchgate::service::notify("STOPPING=1\nSTATUS=Broker stopping");
     broker.shutdown();
     // Give pending AskRule responses a chance to flush before closing transport.
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;

@@ -49,6 +49,9 @@ Captured hostname and executable path do not prove identity or intent.
 - Bounded destination-matching command-line URL hints in live Slack cards and
   TUI inspection, with user info/query/fragment removal and explicit missing-data
   labels. Hints stay outside both model inputs and all permission scopes.
+- Optional systemd readiness/status reporting, workspace-specific route checks
+  before supervised Slack readiness, and protected credential-file support.
+  Noelarchy owns opt-in boot units and a recovery-aware handover guard.
 
 The observer reads already-decided GUI events and never connects to the daemon.
 Its approvals record feedback only. Explicit `approvals --live` reviews actual
@@ -84,7 +87,7 @@ the full eBPF host traffic mix and operational longevity remain to be verified.
    inspection, proposal comparison, and checksums. Add a Rules TUI view and
    reviewed promotion through the existing policy repository. No silent root
    writes, rule pruning, or daemon restarts.
-5. **Operational hardening and handover.** Supervised user service, recovery of
+5. **Operational hardening and handover.** Longer-term service validation, recovery of
    interrupted audit state, retention by time as well as rows, explicit provider
    budgets, and a verified live cutover/rollback procedure.
 
